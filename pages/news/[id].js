@@ -1,33 +1,26 @@
 import React, {useState, useEffect} from 'react'
-import Link from 'next/link'
+import Head from 'next/head'
 import {Body, Container, Image, Title} from '../../components/styled'
-import {connect} from 'react-redux'
+import {connect, useDispatch} from 'react-redux'
 import {Navbar} from '../../components/Navbar'
 import {useRouter} from 'next/router'
+import {initializeStore} from '../../redux/store'
+import {FETCH_NEWS, LOAD_NEWS} from '../../redux/types'
 
-function Post({post}) {
-   const [data, setData] = useState(post)
+function Post({newsData}) {
    const router = useRouter()
-   useEffect(() => {
-      async function load() {
-         try {
-            const request = await fetch('https://newsapi.org/v2/top-headlines?country=us&apiKey=2fa2b9166a9d4f8a9cdb5bd306d40a71')
-            const json = await request.json()
-            setData(
-               json['articles'].filter(el => el.publishedAt === router.query.id)
-            )
-         } catch (e) {
-            throw e
-         }
-      }
 
-      if (!post) {
-         load()
+   const post = newsData.filter(p => {
+      if(p.publishedAt === router.query.id){
+         return p
       }
-   }, [])
-   const {title, description, author, urlToImage, publishedAt, content} = data ? data[0] : []
+   })[0]
+   const {title, description, author, urlToImage, publishedAt, content} = post || []
    return (
       <Container>
+         <Head>
+            <title>{title}</title>
+         </Head>
          <Title>{title}</Title>
          <Navbar/>
          <Body>{author}</Body>
@@ -40,22 +33,29 @@ function Post({post}) {
    )
 }
 
-Post.getInitialProps = async ({query, req}) => {
-   if (!req) {
-      return {
-         data: null
-      }
+
+export async function getServerSideProps() {
+   const reduxStore = initializeStore()
+
+   const load = async ()=>{
+      const res = await fetch('http://newsapi.org/v2/top-headlines?country=us&apiKey=2fa2b9166a9d4f8a9cdb5bd306d40a71')
+      const posts = await res.json()
+      reduxStore.dispatch({
+         type: FETCH_NEWS,
+         payload: posts['articles']
+      })
+      reduxStore.dispatch({
+         type: LOAD_NEWS
+      })
    }
-   const request = await fetch('https://newsapi.org/v2/top-headlines?country=us&apiKey=2fa2b9166a9d4f8a9cdb5bd306d40a71')
-   const json = await request.json()
-   return {
-      data: json['articles'].filter(el => el.publishedAt === query.id)
-   }
+   await load()
+   return { props: { initialReduxState: reduxStore.getState() } }
 }
 
-const mapStateToProps = ({news}) => {
+const mapStateToProps = ({newsData}) => {
+   console.log(newsData)
    return {
-      news
+      newsData
    }
 }
 

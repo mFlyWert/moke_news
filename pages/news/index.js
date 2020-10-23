@@ -1,51 +1,64 @@
 import {Navbar} from '../../components/Navbar'
+import Head from 'next/head'
 import {Post} from '../../components/Post'
-import {Container} from '../../components/styled'
-import {connect} from 'react-redux'
+import {Button, Container} from '../../components/styled'
+import {connect, useDispatch} from 'react-redux'
 import React, {useEffect, useState} from 'react'
-import {fetchNews} from '../../redux/actions'
+import {fetchNews, loadNews} from '../../redux/actions'
+import {initializeStore} from '../../redux/store'
+import {FETCH_NEWS, LOAD_NEWS} from '../../redux/types'
+// const url = 'https://newsapi.org/v2/top-headlines?country=us&apiKey=2fa2b9166a9d4f8a9cdb5bd306d40a71'
 
+function Index({showNews, newsData}) {
 
-function Index({newsData: newsDataServer}){
-   const [newsData, setNewsData] = useState(newsDataServer)
-   useEffect(()=>{
-      const load = async () => {
-         try {
-            const res = await fetch('https://newsapi.org/v2/top-headlines?country=us&apiKey=2fa2b9166a9d4f8a9cdb5bd306d40a71')
-            const newsData = await res.json()
-            setNewsData(newsData['articles'])
-         } catch (e) {
-            throw e
-         }
-      }
-      if (!newsDataServer) {
-         load()
-      }
-   },[])
+   const dispatch = useDispatch()
+   // useEffect(()=>{
+   //    dispatch(fetchNews())
+   // },[])
+   // !showNews.length && dispatch(fetchNews())
 
    return (
       <>
+         <Head>
+            <title>
+               News for Boss
+            </title>
+         </Head>
          <Navbar/>
          <Container>
-            {newsData ? newsData.map((el, id) => <Post {...el} id={id} key={el.title}/>) : <h3>Загрузка...</h3>}
+            {showNews ? showNews.map((el, id) => <Post {...el} id={id} key={el.title}/>) : <h3>Загрузка...</h3>}
+            {showNews.length < newsData.length &&
+            <Button
+               onClick={()=>{
+               dispatch(loadNews())
+            }}>
+               Загрузить еще...
+            </Button>}
          </Container>
       </>
    )
 }
 
-Index.getInitialProps = async ({query, req}) => {
-   if (!req) {
-      return {
-         newsData: null
-      }
+export async function getServerSideProps() {
+   const reduxStore = initializeStore()
+   const load = async ()=>{
+      const res = await fetch('http://newsapi.org/v2/top-headlines?country=us&apiKey=2fa2b9166a9d4f8a9cdb5bd306d40a71')
+      const posts = await res.json()
+      reduxStore.dispatch({
+         type: FETCH_NEWS,
+         payload: posts['articles']
+      })
+      reduxStore.dispatch({
+         type: LOAD_NEWS
+      })
    }
-   const res = await fetch('https://newsapi.org/v2/top-headlines?country=us&apiKey=2fa2b9166a9d4f8a9cdb5bd306d40a71')
-   const newsData = await res.json()
-   return {newsData: newsData['articles']}
+   await load()
+
+   return { props: { initialReduxState: reduxStore.getState() } }
 }
 
-const mapStateToProps = (news) => {
-   return {}
+const mapStateToProps = ({showNews, newsData}) => {
+   return {showNews, newsData}
 }
 
 export default connect(mapStateToProps, null)(Index)
